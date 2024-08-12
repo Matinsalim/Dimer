@@ -31,7 +31,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define Brightnessnumber 75
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -40,6 +39,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+DMA_HandleTypeDef hdma_adc;
+
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
@@ -49,7 +51,9 @@ TIM_HandleTypeDef htim1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_ADC_Init(void);
 /* USER CODE BEGIN PFP */
 
 
@@ -58,103 +62,123 @@ static void MX_TIM1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-char interruptCounter=0;
-char brightness1=100;
-char brightness2=100;
-char brightness3=100;
-char lampNumber=0;
-char pirState=0;
-int timeDelay=0;
+uint8_t interrupt_Counter=0;
+uint8_t brightness1=100;
+uint8_t brightness2=100;
+uint8_t brightness3=100;
+uint8_t lamp_Number=0;
+bool pir_State=0;
+uint16_t timer=0;
+uint16_t amount_of_Delay = 0;
+uint16_t brightness_Range = 0;
+uint16_t min_Pot = 0;
+uint16_t max_Pot = 4095;
+uint16_t max_Brightness = 35;
+uint16_t min_Brightness = 85;
+uint16_t max_Time = 700;
+uint16_t min_Time = 100;
+uint16_t adc_Data[2];//adc_data[0] = Turn on and off delay & adc_data[1] = brightness
+
+
+
+uint32_t MAP(uint16_t au32_IN, uint16_t au32_INmin, uint16_t au32_INmax, uint16_t au32_OUTmin, uint16_t au32_OUTmax)
+{
+	return ((((au32_IN - au32_INmin)*(au32_OUTmax - au32_OUTmin))/(au32_INmax - au32_INmin)) + au32_OUTmin);
+}
+
+
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == ZeroCross_Pin)
 	{
 		htim1.Instance->CNT=0;
-		interruptCounter=0;
+		interrupt_Counter=0;
 	}
 	else  if(GPIO_Pin == Pir_Pin)//Sensor status
 	{
-
-		pirState = !pirState;
-		lampNumber=0;
-
+		pir_State = !pir_State;
+		lamp_Number=0;
 	}
+
+	brightness_Range = MAP(adc_Data[1],min_Pot,max_Pot,min_Brightness,max_Brightness);
 }
+
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef*htim)
 {
-	if (interruptCounter==brightness1)
+	if (interrupt_Counter==brightness1)
 	{
 		HAL_GPIO_WritePin(DimmerSignal1_GPIO_Port,DimmerSignal1_Pin, 1);
 		HAL_GPIO_WritePin(DimmerSignal1_GPIO_Port,DimmerSignal1_Pin, 0);
 	}
-	if (interruptCounter==brightness2)
+	if (interrupt_Counter==brightness2)
 	{
 		HAL_GPIO_WritePin(DimmerSignal2_GPIO_Port,DimmerSignal2_Pin, 1);
 		HAL_GPIO_WritePin(DimmerSignal2_GPIO_Port,DimmerSignal2_Pin, 0);
 	}
-	if (interruptCounter==brightness3)
+	if (interrupt_Counter==brightness3)
 	{
 		HAL_GPIO_WritePin(DimmerSignal3_GPIO_Port,DimmerSignal3_Pin, 1);
 		HAL_GPIO_WritePin(DimmerSignal3_GPIO_Port,DimmerSignal3_Pin, 0);
 	}
-	interruptCounter++;//Interrupt count
-	timeDelay++;
+	interrupt_Counter++;//Interrupt count
+	timer++;
 }
+
 
 
 void on(void) //To turn on the lamp
 {
-	if(lampNumber==0)
+	if(lamp_Number==0)
 	{
-		if(brightness1>Brightnessnumber)//The brightness of the first lamp
+		if(brightness1>brightness_Range)//The brightness of the first lamp
 			brightness1--;
-		else if(brightness1<=Brightnessnumber)
-			lampNumber=1;
+		else if(brightness1<=brightness_Range)
+			lamp_Number=1;
 	}
 
-	else if(lampNumber==1)
+	else if(lamp_Number==1)
 	{
-		if(brightness2>Brightnessnumber)//The brightness of the second lamp
+		if(brightness2>brightness_Range)//The brightness of the second lamp
 			brightness2--;
-		else if(brightness2<=Brightnessnumber)
-			lampNumber=2;
+		else if(brightness2<=brightness_Range)
+			lamp_Number=2;
 	}
 
-	else if(lampNumber==2)
+	else if(lamp_Number==2)
 	{
-		if(brightness3>Brightnessnumber)//The brightness of the third lamp
+		if(brightness3>brightness_Range)//The brightness of the third lamp
 			brightness3--;
-		else if(brightness3<=Brightnessnumber)
-			lampNumber=3;
+		else if(brightness3<=brightness_Range)
+			lamp_Number=3;
 	}
 }
 void off(void)//To turn off the lamp
 {
-	if(lampNumber==0)
+	if(lamp_Number==0)
 	{
 		if(brightness1<100)//The brightness of the first lamp
 			brightness1++;
 		else if(brightness1>=100)
-			lampNumber=1;
+			lamp_Number=1;
 	}
 
-	else if(lampNumber==1)
+	else if(lamp_Number==1)
 	{
 		if(brightness2<100)//The brightness of the second lamp
 			brightness2++;
 		else if(brightness2>=100)
-			lampNumber=2;
+			lamp_Number=2;
 	}
 
-	else if(lampNumber==2)
+	else if(lamp_Number==2)
 	{
 		if(brightness3<100)//The brightness of the third lamp
 			brightness3++;
 		else if(brightness3>=100)
-			lampNumber=3;
+			lamp_Number=3;
 	}
 }
 /* USER CODE END 0 */
@@ -165,12 +189,8 @@ void off(void)//To turn off the lamp
  */
 int main(void)
 {
+
 	/* USER CODE BEGIN 1 */
-
-
-	//int time_2 = 0;
-
-
 
 	/* USER CODE END 1 */
 
@@ -192,25 +212,29 @@ int main(void)
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
+	MX_DMA_Init();
 	MX_TIM1_Init();
+	MX_ADC_Init();
 	/* USER CODE BEGIN 2 */
-
+	HAL_ADCEx_Calibration_Start(&hadc);
+	HAL_ADC_Start_DMA(&hadc,(uint32_t *)adc_Data, 2);
 	HAL_TIM_Base_Start_IT(&htim1);
-
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		if(timeDelay>=500)//To control the lighting time of the lamp
+		amount_of_Delay = MAP(adc_Data[0],min_Pot,max_Pot,min_Time,max_Time);
+
+		if(timer>=amount_of_Delay)//To control the lighting time of the lamp
 		{
-			if(pirState)
+			if(pir_State)
 				on();
-			else if(!pirState)
+			else if(!pir_State)
 				off();
 
-			timeDelay=0;
+			timer=0;
 		}
 	}
 	/* USER CODE END WHILE */
@@ -253,6 +277,68 @@ void SystemClock_Config(void)
 	{
 		Error_Handler();
 	}
+}
+
+/**
+ * @brief ADC Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_ADC_Init(void)
+{
+
+	/* USER CODE BEGIN ADC_Init 0 */
+
+	/* USER CODE END ADC_Init 0 */
+
+	ADC_ChannelConfTypeDef sConfig = {0};
+
+	/* USER CODE BEGIN ADC_Init 1 */
+
+	/* USER CODE END ADC_Init 1 */
+
+	/** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+	 */
+	hadc.Instance = ADC1;
+	hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+	hadc.Init.Resolution = ADC_RESOLUTION_12B;
+	hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+	hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+	hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+	hadc.Init.LowPowerAutoWait = DISABLE;
+	hadc.Init.LowPowerAutoPowerOff = DISABLE;
+	hadc.Init.ContinuousConvMode = ENABLE;
+	hadc.Init.DiscontinuousConvMode = DISABLE;
+	hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+	hadc.Init.DMAContinuousRequests = ENABLE;
+	hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+	if (HAL_ADC_Init(&hadc) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
+	/** Configure for the selected ADC regular channel to be converted.
+	 */
+	sConfig.Channel = ADC_CHANNEL_0;
+	sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+	sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+	if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
+	/** Configure for the selected ADC regular channel to be converted.
+	 */
+	sConfig.Channel = ADC_CHANNEL_1;
+	if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	/* USER CODE BEGIN ADC_Init 2 */
+
+	/* USER CODE END ADC_Init 2 */
+
 }
 
 /**
@@ -302,6 +388,22 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+ * Enable DMA controller clock
+ */
+static void MX_DMA_Init(void)
+{
+
+	/* DMA controller clock enable */
+	__HAL_RCC_DMA1_CLK_ENABLE();
+
+	/* DMA interrupt init */
+	/* DMA1_Channel1_IRQn interrupt configuration */
+	HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
  * @brief GPIO Initialization Function
  * @param None
  * @retval None
@@ -317,12 +419,6 @@ static void MX_GPIO_Init(void)
 
 	/*Configure GPIO pin Output Level */
 	HAL_GPIO_WritePin(GPIOA, LED_Pin|DimmerSignal3_Pin|DimmerSignal2_Pin|DimmerSignal1_Pin, GPIO_PIN_RESET);
-
-	/*Configure GPIO pins : POT2_Pin POT1_Pin */
-	GPIO_InitStruct.Pin = POT2_Pin|POT1_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 	/*Configure GPIO pins : LED_Pin DimmerSignal3_Pin DimmerSignal2_Pin DimmerSignal1_Pin */
 	GPIO_InitStruct.Pin = LED_Pin|DimmerSignal3_Pin|DimmerSignal2_Pin|DimmerSignal1_Pin;

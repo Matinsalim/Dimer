@@ -57,10 +57,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define POT2_Pin GPIO_PIN_0
-#define POT2_GPIO_Port GPIOA
-#define POT1_Pin GPIO_PIN_1
+#define POT1_Pin GPIO_PIN_0
 #define POT1_GPIO_Port GPIOA
+#define POT2_Pin GPIO_PIN_1
+#define POT2_GPIO_Port GPIOA
 #define LED_Pin GPIO_PIN_2
 #define LED_GPIO_Port GPIOA
 #define DimmerSignal3_Pin GPIO_PIN_3
